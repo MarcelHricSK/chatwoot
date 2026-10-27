@@ -493,10 +493,12 @@ const actions = {
 
   deleteMessage: async function deleteLabels(
     { commit },
-    { conversationId, messageId }
+    { conversationId, messageId, deleteOnChannel }
   ) {
     try {
-      const { data } = await MessageApi.delete(conversationId, messageId);
+      const { data } = await MessageApi.delete(conversationId, messageId, {
+        deleteOnChannel,
+      });
       commit(types.ADD_MESSAGE, data);
       commit(types.DELETE_CONVERSATION_ATTACHMENTS, data);
     } catch (error) {
