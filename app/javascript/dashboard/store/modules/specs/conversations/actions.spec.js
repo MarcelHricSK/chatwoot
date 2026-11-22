@@ -802,12 +802,35 @@ describe('#deleteMessage', () => {
       [types.DELETE_CONVERSATION_ATTACHMENTS, { id: 1, content: 'deleted' }],
     ]);
   });
-  it('sends no actions if API is error', async () => {
+  it('asks the API to delete on the channel only when opted in', async () => {
+    axios.delete.mockResolvedValue({ data: { id: 1 } });
+    await actions.deleteMessage(
+      { commit },
+      { conversationId: 1, messageId: 1, deleteOnChannel: true }
+    );
+    expect(axios.delete).toHaveBeenLastCalledWith(
+      expect.stringContaining('/1/messages/1'),
+      { params: { delete_on_channel: true } }
+    );
+
+    await actions.deleteMessage(
+      { commit },
+      { conversationId: 1, messageId: 1 }
+    );
+    expect(axios.delete).toHaveBeenLastCalledWith(
+      expect.stringContaining('/1/messages/1'),
+      { params: {} }
+    );
+  });
+  it('sends no actions and keeps the API response if API is error', async () => {
     const [conversationId, messageId] = [1, 1];
-    axios.delete.mockRejectedValue({ message: 'Incorrect header' });
+    const apiError = {
+      response: { data: { error: 'Could not delete the message on Telegram' } },
+    };
+    axios.delete.mockRejectedValue(apiError);
     await expect(
       actions.deleteMessage({ commit }, { conversationId, messageId })
-    ).rejects.toThrow(Error);
+    ).rejects.toBe(apiError);
     expect(commit.mock.calls).toEqual([]);
   });
 
@@ -1296,6 +1319,44 @@ describe('#addMentions', () => {
       expect(emit).not.toHaveBeenCalledWith(
         'newToastMessage',
         expect.anything()
+      );
+    });
+
+    it('requests nothing in a conversation switched off', async () => {
+      const localCommit = vi.fn();
+
+      await actions.autoTranslateMessages(
+        {
+          state,
+          commit: localCommit,
+          getters: {
+            ...getters,
+            getAutoTranslate: {
+              ...getters.getAutoTranslate,
+              disabledInConversation: true,
+            },
+          },
+        },
+        7
+      );
+
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(localCommit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('#setConversationAutoTranslate', () => {
+    it('saves the switch on the conversation', async () => {
+      axios.patch.mockResolvedValue({ data: {} });
+
+      await actions.setConversationAutoTranslate(
+        {},
+        { conversationId: 7, disabled: true }
+      );
+
+      expect(axios.patch).toHaveBeenCalledWith(
+        expect.stringContaining('/conversations/7'),
+        { auto_translate_disabled: true }
       );
     });
   });
